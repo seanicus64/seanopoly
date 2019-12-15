@@ -1,0 +1,43 @@
+
+
+
+Actual screen:
+    Clear
+    Map
+    What just happened
+    Instructions
+
+
+phases:
+    roll, (get out of jail and rolling)
+    buy, (option to buy or auction new space)
+    accounts, (sell, buy, trade, etc)
+    auction (make bids for an auction)
+    acknowledge (acknowledge a notification, such as being put in jail)
+
+
+turn:
+    change current player
+    show map
+
+    # PHASE: ROLL
+    check if in jail
+    if in jail ask command
+        if r, attempt to roll double
+        if c, use card
+        if b, pay money
+        if c or b:
+            player is out of jail and placed on jail space outside of cell, 
+            map shown 
+            then player is prompted to roll, still ROLL phase
+        if r and is doubles, player moves that amount of spaces and phase is changed (to what matters on the tile landed)
+        if r and not doubles, player goes straight to ACCOUNTS stage
+    if player lands on an unbought property tile:
+        phase is turned to BUY
+        # PHASE: BUY
+        player is prompted if they want to buy a property or auction it
+        if auction, phase turns to AUCTION
+        after the property is bought or auctioned off, phase turns to accounts
+    if player lands on a bought property tile, or other tile:
+        #PHASE: accounts
+
