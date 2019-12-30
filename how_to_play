@@ -1,0 +1,61 @@
+Play is near-identical to regular monopoly.  Please read the monopoly rules book, because this doesn't support commonly misinterpreted rulesets.  This is just a guide to using this program.
+
+Commands:
+
+    /   Sends a public message
+        Example:
+            /Good game, have fun!
+    R   Roll the dice
+    P   Pass to next player, ending your turn.
+    B   Buy a property if not bought
+    I <id>  improve a property by building a house or hotel
+    S <id>  sell a house/hotel or mortgage a property
+    A   Put the property you landed on up for auction
+    T <player> [<offered-items>] FOR [<for-items>] 
+        Offer a trade.
+        <player> can be the player's name, character, or index.
+        [<offered-items>] is a list of properties, Get Out of Jail Free cards, or cash-on-hand the current player is willing to give to <player>
+        [<for-items>] are the properties, cards, and money player would like to receive in exchange
+        All properties must be indicated with the Tile ID
+        Example: 
+            T abby 2a 2b card FOR 8a 100
+        is the current player offering Oriental Avenue, Vermont Avenue and a Get Out of Jail Free Card to abby in exchange for Park Place and $100.
+
+    Auctions:
+        During an auction, all non-bankrupt players can play.  Just type any number above the current amount before the timer runs out, and the timer will restart.  If other players type something, your amount is still buffered despite your line being physically cut off.  Just finish the amount and press enter!
+
+    Jail:
+        To get out of jail, you have a few options:
+            R   Attempt to roll doubles to get out
+            B   Pay $50 bail
+            C   Use a Get Out of Jail Free card
+
+Visual:
+To save space, the board isn't circular visually, but is to be treated circular anyway.  The space after Boardwalk is Go.  
+
+Each normal tile is designed like this:
+1: +------+
+2: |[ hh ]|
+3: |  VT  |
+4: | Ave  |
+5: |  @   |
+6: | 100  |
+7: +--2b--+
+
+Line 1 is simply the top border
+Line 2 is the top.  If this line is "======" that means the property isn't bought yet.  The color of the brackets indicate the current owner of the property.  The amount of "h"s indicates how many houses, and "*HH*" means it's a hotel. "XXXX" means it's mortgaged.  The color of this line (besides the brackets) shows which color group the property is in.  Unbuildable properties will only have the brackets.
+
+Lines 3 and 4 are text indicating the property name, usually in abbreviated form.
+
+Line 5 shows the occupants of the tile.  A colored dash is a "Footprint", showing that a user passed through this tile at the beginning of their turn. An inverted character shows the player whose turn it is.
+
+Line 6 is the cost of that property, or how much the player owes if it's a Tax tile.
+Line 7 shows the Tile ID within the bottom border.  The Tile ID is in the same color of the player that may own the tile.
+
+Jail has four cells in which a player may be imprisoned.  A player appearing outside those cells is "Just Visiting".  Free Parking does nothing functionally, but has parking spaces the player may park in.
+
+Under the board is the list of players.  The greater-than sign shows which player it currently is.  This is followed by the player name, character, and amount of money on hand.
+Under that shows the current player's stats.
+Then is the game's messages and any prompts.
+
+
