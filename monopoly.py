@@ -1028,7 +1028,7 @@ class Board():
             return None
 
         offer = [player, offeree, offered_stuff, for_stuff]
-        offered_string: ""
+        offered_string = ""
         offered_property_string = ", ".join(["{}[{}]".format(p.name, p.label) for p in offered_stuff["properties"]])
         for_property_string = ", ".join(["{}[{}]".format(p.name, p.label) for p in for_stuff["properties"]])
         offered_money_string, for_money_string, offered_card_string, for_card_string = "", "", "", ""
@@ -1363,11 +1363,12 @@ def main_loop(conn, you, game):
         if game.current_player:
             you = game.current_player
         try:
-            raw = conn.recv(1024)
-            print(type(raw))
-            raw = raw.decode("utf-8")
-            print(type(raw))
-            raw = conn.recv(1024).decode("utf-8").strip()
+            #raw = conn.recv(1024)
+            #print(type(raw))
+            #raw = raw.decode("utf-8")
+            #print(type(raw))
+            #raw = conn.recv(1024).decode("utf-8").strip()
+            raw = conn.recv(1).decode("utf-8").strip()
             print(raw)
             data = raw.lower()
         except:
