@@ -1332,7 +1332,12 @@ def user_settings(conn, game):
         conn.send(bytes("Type in your name, desired character(@ # % or &), and color (\033[31;1m1\033[32;1m2\033[33;1m3\033[0m) without using anyone else's\n".encode("utf-8")))
         for player in game.players:
             conn.send(bytes("{} - {}\n".format(player.name, player).encode("utf-8")))
-        data = conn.recv(1024).decode("utf-8").strip().lower().split()
+#        data = conn.recv(1024).decode("utf-8").strip().lower().split()
+        raw = conn.recv(1024)
+        try:
+           data = raw.decode("utf-8").strip().lower().split()
+        except: 
+            continue
         if len(data) != 3: 
             continue
         if len(data[1]) != 1 and not data[1] in "@#%&": 
@@ -1369,6 +1374,7 @@ def main_loop(conn, you, game):
             #print(type(raw))
             #raw = conn.recv(1024).decode("utf-8").strip()
             #raw = conn.recv(1).decode("utf-8").strip()
+            
             raw = conn.recv(1024).decode("utf-8").strip()
             print(raw)
             data = raw.lower()
@@ -1461,6 +1467,7 @@ def handle_connection(conn, game_list):
     game = game_menu(conn, game_list)
     code = bytearray()
     for i in [0xff, 0xfe, 0x03, 0xff, 0xfb, 0x22, 0xff, 0xfe, 0x01]:
+#    for i in [0xff, 0xfd, 0x03, 0xff, 0xfc, 0x22, 0xff, 0xfd, 0x01]:
         code.append(i)
     conn.send(code)
     if debug:
