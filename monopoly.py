@@ -1368,7 +1368,8 @@ def main_loop(conn, you, game):
             #raw = raw.decode("utf-8")
             #print(type(raw))
             #raw = conn.recv(1024).decode("utf-8").strip()
-            raw = conn.recv(1).decode("utf-8").strip()
+            #raw = conn.recv(1).decode("utf-8").strip()
+            raw = conn.recv(1024).decode("utf-8").strip()
             print(raw)
             data = raw.lower()
         except:
@@ -1458,6 +1459,10 @@ def main_loop(conn, you, game):
 def handle_connection(conn, game_list):
     """Handles a connection to the server."""
     game = game_menu(conn, game_list)
+    code = bytearray()
+    for i in [0xff, 0xfe, 0x03, 0xff, 0xfb, 0x22, 0xff, 0xfe, 0x01]:
+        code.append(i)
+    conn.send(code)
     if debug:
         colors = [1, 2, 3]
         names = ["abby", "becky", "charlie"]
