@@ -8,62 +8,13 @@ import sys
 import textwrap
 import time
 import chance
-class User:
-    money = 1500
-    money = 150000000000
-    def __init__(self, color, char, name, conn=None):
-        self.color = color
-        self.char = char
-        self.name = name
-        self.conn = conn
-        self.color_code = "\033[3{};1m".format(color)
-        self.tile = None
-        self.jailed = False
-        self.num_cards = 0  # get out of jail free cards
-        self.num_cards = 1  # TODO: debugging
-        self.rolls = []
-        self.obtainable_wealth = 0  # amount of money play will have if they sell everything
-                                    # distinct from worth in that mortgaged props only give you half
-        self.bankrupt = False
-
-    @property 
-    def worth(self):
-        """Returns total amount that a player is worth, with full unmortgaged property values."""
-        total = 0
-        obtainable_wealth = 0
-        for t in self.game.tiles:
-            if hasattr(t, "owner") and t.owner == self:
-                if t.mortgaged:
-                    total += t.prices["mortgaged"]
-                else:
-                    total += t.prices["printed"]
-                    if type(t) is BuildableTile:
-                        obtainable_wealth += t.prices["mortgaged"]
-                        # A hotel is worth the same as a house
-                        num_houses = 5 if t.hotel else t.num_houses
-                        for h in range(num_houses):
-                            total += t.prices["building"]
-                            obtainable_wealth += t.prices["building"]
-        obtainable_wealth += self.money
-        self.obtainable_wealth = obtainable_wealth
-        total += self.money
-        return total
-
-    def send(self, message):
-        """Sends a specific user a message,"""
-        self.conn.send(bytes((message+"\n").encode("utf-8")))
-
-    def rolled_doubles(self):
-        """Returns True if last roll was doubles."""
-        # Useful for determining if user goes to or leaves jail.
-        if self.rolls[-1][0] == self.rolls[-1][1]:
-            return True
-        return False
-
-    def __str__(self):
-        return self.color_code + self.char + "\033[0m"
-    def __repr__(self):
-        return self.name
+import vis
+from helper_classes import User, Board
+from tiles import Group, GeneralTile, PropertyTile, TaxTile, RailroadTile, JailTile 
+from tiles import UtilityTile, FreeParkingTile, CommunityTile, ChanceTile
+from tiles import GoToJailTile, BuildableTile
+random.seed(0)
+import random
 
 class Group:
     """A group of properties, for example, the red properties."""
@@ -105,9 +56,7 @@ class GeneralTile:
         occupant_graphics = []
         for o in self.occupants:
             if o == self.game.current_player:
-                print("is current_player")
                 graphic = "\033[{};7m{}\033[0m".format(o.color, str(o))
-                print(graphic)
             else:
                 graphic = str(o)
             occupant_graphics.append(graphic)
@@ -115,11 +64,10 @@ class GeneralTile:
         
 #        if occupant_graphic:
 #            print(occupant_graphic)
-        print(self.footprints)
+        #print(self.footprints)
         for f in self.footprints:
-            occupant_graphics.append("\033[3{}m-\033[0m".format(f.color))
+            occupant_graphics.append("\033[3{};1m*\033[0m".format(f.color))
         #random.shuffle(occupant_graphics)
-        print(occupant_graphics)
 
         # Centering graphic for aesthetic reasons.
 #        if len(self.occupants) == 0:
@@ -148,8 +96,6 @@ class GeneralTile:
             occupant_graphic = " {}{}{}{} ".format(*occupant_graphics)
         occupant_graphic += " " * ((self.width+1) - (len(occupant_graphic)))
 
-        if occupant_graphic.strip():
-            print("!!", occupant_graphic)
         return occupant_graphic
 
     def on_landing(self, player):
@@ -178,7 +124,8 @@ class PropertyTile(GeneralTile):
     def check_which_prompt(self, player):
         """Queues an appropriate message for when a player lands on an unbought tile."""
         if player.money >= self.prices["printed"]:
-            self.game.messages.append("can buy easily")
+            pass
+            #self.game.messages.append("can buy easily")
         elif player.obtainable_wealth >= self.prices["printed"]:
             self.game.messages.append("You must sell property before you can afford this")
         else:
@@ -186,15 +133,31 @@ class PropertyTile(GeneralTile):
 
     def buy(self, player):
         """Player buys the property."""
-        self.owner = player
+        print(1)
+        print("---------------")
+        print("owner is {}".format(self.owner))
+        if self.owner:
+            print(2)
+            player.send("This property is not for sale!")
+            return
+        print(3)
+        print("owner is {}".format(self.owner))
+        print("---------------")
         try:
+            print(4)
             assert player.money >= self.prices["printed"]
         except: 
+            print(5)
             return False
+        print(6)
+        self.owner = player
         player.money -= self.prices["printed"]
         self.game.add_message("{} bought the deed for {}".format(player.name, self.name))
+        print(7)
         self.game.end_buy_phase()
+        print(8)
         self.game.SHOW_BOARD()
+        return True
 
     def can_be_dismantled(self):
         """Returns if a player can sell building of property, or mortgage it."""
@@ -229,13 +192,21 @@ class PropertyTile(GeneralTile):
 
         # If player is currently trying to resolve debt before 
         # they can continue normal play.
-        if self.game.phase == "debt":
-            player = self.game.current_player
-            if hasattr(player.tile, "owner"):
-                player.tile.owner.money += amount
-            if amount >= player.debt:
-                self.game.phase = "accounts"
-            player.debt = max(0, player.debt - amount)
+        player = self.game.current_player
+        player.money += amount
+#       if player.in_debt:
+#           player.money += amount
+#           if hasattr(player.tile, "owner"):
+#               player.tile.owner.money += amount
+#           if amount 
+#       if self.game.phase == "debt":
+#       
+#           player = self.game.current_player
+#           if hasattr(player.tile, "owner"):
+#               player.tile.owner.money += amount
+#           if amount >= player.debt:
+#               self.game.phase = "accounts"
+#           player.debt = max(0, player.debt - amount)
         return
 
     @property
@@ -269,7 +240,11 @@ class PropertyTile(GeneralTile):
         if self.owner:
             if self.owner != player:
                 amount = self.determine_rent()
+                print("hhhhhhhhhhhhhh")
                 self.game.pay_amount(player, self.owner, amount)
+                print("jjjjjjjjjjjjjjj")
+#            if not self.game.phase == "debt":
+#                self.game.end_buy_phase()
             self.game.end_buy_phase()
 
         elif not self.owner:
@@ -315,7 +290,10 @@ class RailroadTile(PropertyTile):
 
     def determine_rent(self):
         """Returns how much rent a landing player owes to the owner."""
-        rent = 25 * self.game.check_other_rrs_owned(self)
+        rent = 25
+
+        for i in range(self.game.check_other_rrs_owned(self) - 1):
+            rent *= 2
         return rent
 
 class JailTile(GeneralTile):
@@ -341,12 +319,17 @@ class UtilityTile(PropertyTile):
 
     def on_landing(self, player):
         """What happens when a player lands here."""
+        print("utility on_landing")
         if not self.owner:
+            print("there is no owner")
             self.game.prompt = "No one owns this property. Would you like to [b]uy it or let it go to [a]uction?"
         elif self.owner:
+            print("there is an owner")
             if self.owner != player:
+                print("owner is not hte player")
                 rent = self.determine_rent()
                 self.game.add_message("{} paid ${} to {}".format(player.name, rent, self.owner.name))    
+            print("ending the buy phase")
             self.game.end_buy_phase()
 
     def determine_rent(self):
@@ -468,6 +451,9 @@ class BuildableTile(PropertyTile):
             actual_amount = -1
         else:
             actual_amount = self.num_houses
+
+        if actual_amount == -1:
+            return False
         for tile in self.group.tiles:
             temp_actual_amount = 5 if tile.hotel else tile.num_houses
             temp_actual_amount = -1 if tile.mortgaged else temp_actual_amount
@@ -506,14 +492,106 @@ class BuildableTile(PropertyTile):
         else:
             building_graphic = "=" * 6 if not self.owner else "=" * 4
         building_graphic = "{:^4}".format(building_graphic)
-        string += self.group.color_code + building_graphic
+        string += "\033[0m" + self.group.color_code + building_graphic
         if self.owner:
             string += self.owner.color_code + "]"
         string += "\033[0m"
         return string
 
+class User:
+    _money = 1500
+    trying_to_quit = False
+    connected = True
+    #_money = 10
+#    _money = 150000000000
+    def __init__(self, color, char, name, ascii_mode, conn=None):
+        self.color = color
+        self.char = char
+        self.name = name
+        self.ascii_mode = ascii_mode
+        self.conn = conn
+        self.color_code = "\033[3{};1m".format(color)
+        self.tile = None
+        self.jailed = False
+        self.num_cards = 0  # get out of jail free cards
+        self.num_cards = 1  # TODO: debugging
+        self.rolls = []
+        self.obtainable_wealth = 0  # amount of money player will have if they sell everything
+                                    # distinct from worth in that mortgaged props only give you half
+        letters = "abcdefghjkmnpqrstuvwxyz"
+        # very unlikely that a sequence will reappear but...
+        while True:
+            self.code = ""
+            for i in range(10):
+                self.code += random.choice(letters)
+            if self.code not in [p.code for p in all_players]:
+                break
+            
+        self.in_debt = False
+        self.indebted_to = None
+        self.bankrupt = False
+
+    @property
+    def money(self):
+        return self._money
+    @money.setter
+    def money(self, amount):
+        # first thing is to resolve any debt
+        if self.in_debt and self.indebted_to and amount > 0:
+            owed = abs(self._money)
+            self._money += amount
+            self.indebted_to.money += min(owed, amount)
+            print("{} got {}".format(self.indebted_to, min(owed, amount)))
+        print(self._money, amount, "<--amount of money being given to you") 
+        self._money = amount
+        self.in_debt = False
+        if self._money < 0:
+            self.in_debt = True
+            
+
+    @property 
+    def worth(self):
+        """Returns total amount that a player is worth, with full unmortgaged property values."""
+        total = 0
+        obtainable_wealth = 0
+        for t in self.game.tiles:
+            if hasattr(t, "owner") and t.owner == self:
+                if t.mortgaged:
+                    total += t.prices["mortgaged"]
+                else:
+                    total += t.prices["printed"]
+                    if type(t) is BuildableTile:
+                        obtainable_wealth += t.prices["mortgaged"]
+                        # A hotel is worth the same as a house
+                        num_houses = 5 if t.hotel else t.num_houses
+                        for h in range(num_houses):
+                            total += t.prices["building"]
+                            obtainable_wealth += t.prices["building"]
+        obtainable_wealth += self.money
+        self.obtainable_wealth = obtainable_wealth
+        total += self.money
+        return total
+
+    def send(self, message):
+        """Sends a specific user a message,"""
+        self.conn.send(bytes((message+"\n").encode("utf-8")))
+
+    def rolled_doubles(self):
+        """Returns True if last roll was doubles."""
+        # Useful for determining if user goes to or leaves jail.
+        if self.rolls[-1][0] == self.rolls[-1][1]:
+            return True
+        return False
+
+    def __str__(self):
+        return self.color_code + self.char + "\033[0m"
+    def __repr__(self):
+        return self.name
+        
+        
 class Board():
     """The object that represents the game as a whole."""
+    turn = 0
     def __init__(self, tiles):
         self.current_player = None
         self.tiles = tiles
@@ -537,6 +615,7 @@ class Board():
         self.community_deck.shuffle()
         self.current_trade = None
         self.show_labels = True
+        self.chat_messages = []
 
         tile_iterator = iter(self.tiles[1:])
         for next_tile in tile_iterator:
@@ -548,25 +627,51 @@ class Board():
 
         self.cells = [" ", " ", " ", " "] # representing players in jail
 
+    def advance_to_nearest_tiletype(self, tiletype, player):
+        tt_dict = {"utility": UtilityTile, "railroad": RailroadTile}
+        tiletype = tt_dict[tiletype]
+        current = player.tile
+        while True:
+            # "Advance to nearest" is understood by the community to always mean /forward/.
+            current = current.next_tile
+            # per the rules, if you pass GO whether through a roll OR CARD, collect 200.
+            #if current == self.tiles[0]:
+            #    player.money += 200 #TODO: maybe use pay_amount function
+            if isinstance(current, tiletype):
+                break
+
+        self.move_player(player, current, override=True)
+        return current
+
     def pay_amount(self, player, recipient, amount):
         """Player pays another player or the bank."""
+        print("PAYING AMOUNT: " + str(amount))
         # When penultimate player runs out of money, game is over.
+        print(000000000)
         if amount > player.worth:
+            print(111111, player.worth)
             self.declare_bankrupcy(player, recipient, amount)
             if self.phase == "GAMEOVER":
                 return
         # Player ran out of hard cash, must sell properties before turn can continue
         elif amount > player.money:
+            print(222222222, player.worth)
+            print("{} paying {}".format(player.name, amount))
             if recipient != "bank":
                 recipient.money += player.money
-            player.debt = amount - player.money
-            self.phase = "debt"
-            self.messages.append("{} paid {} but still owes {}.".format(player, player.money, player.debt))
-            player.money = 0
+            #player.debt = amount - player.money
+            #self.phase = "debt"
+            #print("player still owes {}".format(player.debt))
+            player.money -= amount
+            self.messages.append("{} paid {} but still owes {}.".format(player, amount + player.money, -1 * player.money))
+            player.indebted_to = recipient
             return
 
+        
         else:
             player.money -= amount
+            if recipient != "bank":
+                recipient.money += amount
             self.messages.append("{} paid {} to {}".format(player, amount, recipient))
             player.send("You paid {} in rent".format(amount))
 
@@ -619,26 +724,36 @@ class Board():
         self.broadcast("{}({}) joined the game!".format(player.name, player))
     
     def SHOW_BOARD(self):
-        string = ""
-        string += str(self)
+#        string = ""
+#        string += str(self)
         for e, p in enumerate(self.players, 1):
+            string = ""
+            if p.ascii_mode:
+                string += vis.show_board(self, "basic")
+            else:
+                string += vis.show_board(self, "fancy")
+
             if p == self.current_player: string += ">"
             else: string += " "
             string += "{}: {} ({}): ${}\n".format(e, p.name, p, p.money)
-        string += "Current player: {} ({}), has ${} (${} including property) -- {}\n".format(self.current_player.name, self.current_player, self.current_player.money, self.current_player.worth, self.current_player.obtainable_wealth)
-        for m in self.messages:
-            string += m + "\n"
-        for p in self.players:
-            if p == self.current_player: continue
-            try:
-                p.send(string)
-            except:
-                pass
+            string += "Current player: {} ({}), has ${} (${} including property) -- {}\n".format(self.current_player.name, self.current_player, self.current_player.money, self.current_player.worth, self.current_player.obtainable_wealth)
+            for m in self.messages:
+                string += m + "\n"
+#        for p in self.players:
+#            if p == self.current_player: continue
+            if p == self.current_player:
+                string += self.prompt
+                self.promot = ""
+                self.messages = []
+            
+            p.send(string)
+            #except:
+            #    pass
 
-        string += self.prompt
-        self.prompt = ""
-        self.messages = []
-        self.current_player.send(string)
+#        string += self.prompt
+#        self.prompt = ""
+#        self.messages = []
+#        self.current_player.send(string)
 
     def begin(self):
         """Initializes the beginning of the game."""
@@ -653,6 +768,26 @@ class Board():
             player.tile = self.tiles[0]
             player.game = self
 
+        #TODO: debugging----------------
+        self.tiles[15].owner = self.players[1]
+
+        self.tiles[5].owner = self.players[1]
+        self.tiles[25].owner = self.players[1]
+        self.tiles[35].owner = self.players[1]
+        #self.tiles[-1].owner = self.players[0]
+        #self.tiles[-3].owner = self.players[0]
+        #self.tiles[-1].num_houses = 2
+        #self.tiles[-3].num_houses = 2
+        #self.tiles[-11].owner = self.players[1]
+        #self.tiles[-13].owner = self.players[1]
+        #self.tiles[-14].owner = self.players[1]
+        #self.tiles[-11].num_houses = 4
+        #self.tiles[-13].num_houses = 4
+        #self.tiles[-14].num_houses = 4
+        #self.tiles[12].owner = self.players[1]
+
+        #-------------------------------
+
         self.started = True
         self.current_player = self.players[0]
         self.tiles[0].occupants = self.players.copy()
@@ -666,13 +801,17 @@ class Board():
     def player_rolls(self):
         """Handles what happens during or after a player rolls the dice at beginning of their turn."""
         amount = self.roll_dice()
+        if self.turn == 0:
+            amount = 7 # TODO: debugging for chance
+        if self.turn == 1:
+            amount = 39
+        self.turn += 1
         if len(self.current_player.rolls) >= 3:
             is_double = True
             for roll in self.current_player.rolls[-3:]:
                 if not roll[0] == roll[1]:
                     is_double = False
             if is_double:
-                print(self.current_player.rolls)
                 self.send_to_jail(self.current_player)
                 return
         self.phase = "buy"
@@ -691,11 +830,13 @@ class Board():
         self.move_player(self.current_player, new_tile)
         self.SHOW_BOARD()
 
-    def roll_dice(self):
+    def roll_dice(self, override=False):
         """Determines how far to move the player."""
         die1 = random.randrange(1, 7)
         die2 = random.randrange(1, 7)
-        self.current_player.rolls.append((die1, die2))
+        # usually rolling dice is to move player, but for cards it can do other things
+        if not override:
+            self.current_player.rolls.append((die1, die2))
         return die1 + die2
 
     def game_over(self):
@@ -724,10 +865,10 @@ class Board():
         if self.current_player.jailed:
             self.prompt = "It's your turn, but you are in jail. To leave you can pay $50 [b]ail, attempt to [r]oll a double, or play a Get Out of Jail Free [C]ard"
         else:
-            self.prompt = "It is your turn! Enter 'R' to roll the dice. ZZZZZZZZZZ"
+            self.prompt = "It is your turn! Enter 'R' to roll the dice."
         self.SHOW_BOARD()
     
-    def move_player(self, player, tile):
+    def move_player(self, player, tile, override=False):
         """Moves the player to a specific tile."""
         # If you didn't know the difference between whither and whence, now you know.
         whence = player.tile
@@ -739,10 +880,12 @@ class Board():
 
         # Player passed Go
         if self.tiles.index(whither) <= self.tiles.index(whence):
-            player.money += 200
+            player.money += 200 #TODO: this is passing go, maybe a specific function for that?
+        if override:
+            return
         if hasattr(whither, "on_landing"):
             whither.on_landing(player)
-
+        
         if whence.name in ["Jail", "Free Parking"]:
             whence.slots = [" " if s == player else s for s in whence.slots]
         if whither.name in ["Jail", "Free Parking"]:
@@ -751,7 +894,6 @@ class Board():
     def get_next_tile(self, player, amount, single=False):
         """Returns the tile a player is moving to."""
         current_tile = player.tile
-        print("starting tile is: ", player.tile)
         #TODO: debugging
         previous = [current_tile]
         if single:
@@ -764,9 +906,7 @@ class Board():
             try:
                 current_tile = current_tile.next_tile #TODO: occasionally doesn't work, figure out why
                 if i < amount - 1:
-                    print(current_tile)
                     current_tile.footprints.add(player)
-                print("{} add {}".format(current_tile.name, player))
             except Exception as err:
                 print(previous)
                 raise err
@@ -790,7 +930,7 @@ class Board():
         amount = 0
         player = None
         self.current_auction_price = 0
-        self.seconds_left = 21
+        self.seconds_left = 11
 
         while self.seconds_left > 0:
             if (self.seconds_left % 5 == 0) or self.seconds_left <= 5:
@@ -813,8 +953,13 @@ class Board():
         if self.phase == "GAMEOVER":
             return
         self.phase = "accounts"
-        if self.current_player.rolls[-1][0] == self.current_player.rolls[-1][1] and not self.current_player.jailed:
-            self.prompt = "Do you want to handle your [a]ccounts or [r]oll again?"
+        #TODO: this raised an error once, saying current_player can't be NoneType, after player was sent to jail after chance card during first turn
+        if self.current_player.in_debt:
+            self.prompt = "You must resolve your debt before you can continue."
+        elif self.current_player.rolls[-1][0] == self.current_player.rolls[-1][1] and not self.current_player.jailed:
+#            self.prompt = "Do you want to handle your [a]ccounts or [r]oll again?"
+            #TODO: implement rolling again!
+            self.prompt = "Do you want to handle your [a]ccounts or [p]ass to the next person's turn?"
         else:
             self.prompt = "Do you want to handle your [a]ccounts or [p]ass to the next person's turn?"
 
@@ -822,7 +967,6 @@ class Board():
         """Moves a player to jail."""
         if hasattr(player.tile, "occupants"):
             player.tile.occupants.remove(player)
-        print("sent to jail???")
         player.tile = None
         while True:
             which_cell = random.randrange(4)
@@ -888,7 +1032,11 @@ class Board():
 
     def show_player_info(self, player):
         """Show the players data about themselves in response to 'me' query."""
-        player.send("{} ({}) - ${}".format(player.name, player, player.money))
+        string = ""
+        string += "Cash on hand: ${}; Total worth: ${}\n".format(player.money, player.worth)
+        jail_string = "Jail-free cards: {}\n".format(player.num_cards)
+        string += jail_string
+#        player.send("{} ({}) - ${}".format(player.name, player, player.money))
         grouped_a = list(filter(lambda t: hasattr(t, "group"), self.tiles))
         grouped = sorted(grouped_a, key=lambda t: t.group.id)
         owned_by_player = list(filter(lambda t: t.owner == player, grouped))
@@ -904,7 +1052,8 @@ class Board():
             else:
                 owned_string += "{}: {}, ".format(tile.label, tile.name)
         owned_string.strip(", ")
-        player.send(owned_string)
+        string += owned_string
+        player.send(string)
 
     def check_other_rrs_owned(self, tile):
         """Check how many other railroads the player owns."""
@@ -915,11 +1064,11 @@ class Board():
     def handle_bid(self, player, amount):
         """Handles a bid for an auction."""
         amount = int(amount)
-        if self.highest_bid[1] < amount < player.money:
+        if self.highest_bid[1] < amount <= player.money:
             self.highest_bid = (player, amount)
             if not self.auction_timer.is_alive():
                 self.auction_timer.start()
-            self.seconds_left = 21
+            self.seconds_left = 11
 
     def accept_trade(self):
         """Transfer property and money in a trade."""
@@ -932,14 +1081,23 @@ class Board():
         offeree.num_cards += offered_stuff["cards"] #TODO: fix cards
         
         for p in for_stuff["properties"]:
-            print(p.owner)
             p.owner = player
-            print(p.owner)
         for p in offered_stuff["properties"]:
             p.owner = offeree
 
         self.current_trade = None
 
+    def help(self, player):
+        example_tile = """
+        1: +------+      
+        2: |[====]|   color = which group, color of brackets = owner, # = house
+        3: |  KY  |   Property name
+        4: | Ave  |   Property name [cont]
+        5: | # @  |   Players on property
+        6: |  220 |   Cost of property without buildings
+        7: +--5a--+   property id
+        """
+        player.send(example_tile)
 
     def parse_trade(self, player, line):
         line = [w.lower() for w in line]
@@ -1024,7 +1182,6 @@ class Board():
 
         # Ensure something is being moved both sides of the transaction
         if not (any(offered_stuff.values()) and any(for_stuff.values())):
-            print("d")
             return None
 
         offer = [player, offeree, offered_stuff, for_stuff]
@@ -1048,70 +1205,19 @@ class Board():
         self.broadcast(message)
         self.messages.append(message)
         return offer
-
+    def add_chat(self, user, message):
+       log = "{} ({}): {}".format(user.name, user, message)
+       self.broadcast(log)
+       self.chat_messages.append(log)
             
         
     def __str__(self):
-        self.frame += 1
-        t = self.tiles
-        board = """
-        \033c{}
-        +-----+------+------+------+------+------+------+------+------+------+-------+\r
-        |     |{}|{}|  ?   |{}|{}|      |{}|  $   |{}|       | \r
-        |JAIL |  CT  |  VT  |      |Orient|Readng|INCOME|Baltic|Commun|Medit | <---- | \r
-        |     | Ave  | Ave  |CHANCE| Ave  |  RR  | TAX  |  Ave |Chest | Ave  |   GO  | \r
-        |==+  |{}|{}|{}|{}|{}|{}|{}|{}|{}|{} | \r
-        |{} |  | 120  | 100  |  ?   | 100  | 200  | -200 |  60  |  $   |  60  |  +200 | \r
-        |==|{} +--{}--+--{}--+------+--{}--+--{}--+------+--{}--+------+--{}--+-------+ \r
-        |{} |  | \r
-        |==|{} +------+------+------+------+------+------+------+------+------+-------+\r
-        |{} |  |{}|{}|{}|{}|{}|{}|  $   |{}|{}|       |\r
-        |==|{} |St.Cs'|Electr|States|  VA  |  PA  |SJames|Commun|  TN  |  NY  | \{}\ \ | \r
-        |{} |  |Place |{}Co{}| Ave  | Ave  |  RR  |Place |Chest |  Ave | Ave  |  \ \ \| \r
-        |==+{} |{}|{}|{}|{}|{}|{}|{}|{}|{}|       | \r
-        |     |  140 | 150  |  140 |  160 | 200  |  180 |  $   |  180 |  200 | \{}\ \ | \r
-        +--||-+--{}--+--{}--+--{}--+--{}--+--{}--+--{}--+------+--{}--+--{}--+  \ \ \| \r
-           ||                                                                |  FREE | \r
-        +--||-+------+------+------+------+------+------+------+------+------+  PARK | \r
-        |     |{}|{}|{}|{}|{}|{}|{}|  ?   |{}|  ING  | \r
-        |     |Marvin|Water{}|Ventnr|Atlant| B&O  |  IL  |  IN  |      |  KY  | \ \{}\ | \r
-        |     |Gardns|{}Works| Ave  | Ave  |  RR  | Ave  |  Ave |CHANCE| Ave  |  \ \ \| \r
-        |  ^  |{}|{}|{}|{}|{}|{}|{}|{}|{}|       | \r
-        |  |  |  280 |  150 |  260 |  260 | 200  |  240 |  220 |  ?   |  220 | \{}\ \ | \r
-        |     +--{}--+--{}--+--{}--+--{}--+--{}--+--{}--+--{}--+------+--{}--+-------+ \r
-        | GO  |                                                                          \r
-        | TO  +------+------+------+------+------+------+------+------+------+          \r
-        |JAIL |{}|{}|   $  |{}|{}|  ?   |{}|      |{}|\r
-        |     |Pacifc|  NC  |Commun|  PA  |Short |      |Park  |Luxury|Board |\r
-        |     | Ave  |  Ave |Chest | Ave  |  Line|CHANCE| Place| Tax  | walk |\r
-        |     |{}|{}|{}|{}|{}|{}|{}|{}|{}|\r
-        |     |  300 |  300 |  $   |  320 |  200 |  ?   |  350 | -100 |  400 |          \r
-        +-----+--{}--+--{}--+------+--{}--+--{}--+------+--{}--+------+--{}--+         \r
-        {} - {}\n\r""" 
-        text = textwrap.dedent(board.format(
-            self.phase,
-            t[9].t, t[8].t,         t[6].t, t[5].t,         t[3].t,         t[1].t, 
-            t[9].o, t[8].o, t[7].o, t[6].o, t[5].o, t[4].o, t[3].o, t[2].o, t[1].o, t[0].o, 
+        return  vis.show_board(self, "basic")
 
-            self.cells[0], t[10].slots[0], 
-            t[9].l, t[8].l, t[6].l, t[5].l, t[3].l, t[1].l,
-            self.cells[1], t[10].slots[1], self.cells[2],
 
-            t[11].t, t[12].t, t[13].t, t[14].t, t[15].t, t[16].t,          t[18].t, t[19].t, #"F",
-            t[10].slots[2], t[20].slots[0], self.cells[3], "\033[33m* \033[0m", "\033[33m *\033[0m", t[10].slots[3], 
-            t[11].o, t[12].o, t[13].o, t[14].o, t[15].o, t[16].o, t[17].o, t[18].o, t[19].o, t[20].slots[1],
-            t[11].l, t[12].l, t[13].l, t[14].l, t[15].l, t[16].l, t[18].l, t[19].l,
 
-            t[29].t, t[28].t, t[27].t, t[26].t, t[25].t, t[24].t, t[23].t,          t[21].t, "\033[34;1m~\033[0m", t[20].slots[2], "\033[34;1m~\033[0m",
-            t[29].o, t[28].o, t[27].o, t[26].o, t[25].o, t[24].o, t[23].o, t[22].o, t[21].o, t[20].slots[3],
-            t[29].l, t[28].l, t[27].l, t[26].l, t[25].l, t[24].l, t[23].l,          t[21].l,         
 
-            t[31].t, t[32].t,          t[34].t, t[35].t,          t[37].t,          t[39].t, 
-            t[31].o, t[32].o, t[33].o, t[34].o, t[35].o, t[36].o, t[37].o, t[38].o, t[39].o, 
-            t[31].l, t[32].l,          t[34].l, t[35].l,          t[37].l,          t[39].l, 
-            self.frame, self.players, #TODO
-        ))
-        return text
+
 
 first = Group(2, 1)
 second = Group(6, 2)
@@ -1303,60 +1409,128 @@ tiles = [
 
 def game_menu(conn, game_list):
     """'Lets you select which current game to play."""
+    def quit():
+        conn.close()
+        game = None
+        return game
+    # gets set only if rejoining existing game with a code
+    player = None
+    trying_to_quit = False
     while True:
-        conn.send(bytes("Select an existing game to play, or create a [n]ew game?\n".encode("utf-8")))
+        if trying_to_quit:
+            conn.send(bytes("You sure you want to quit? \033[31mqy\033[m to confirm. ".encode("utf-8")))
+            trying_to_quit = False
+        else: conn.send(bytes("\033cSelect an existing game to play, or create a [n]ew game?\n\rq to quit.\n\r".encode("utf-8")))
         for e, i in enumerate(game_list):
-            conn.send(bytes("{} - {}\n".format(e, " ".join([p.name for p in i.players])).encode("utf-8")))
+            active = False
+            if i.started:
+                active = True
+            string = "{}#{} - {} player(s) {}  Turn:{}\033[0m\n\r".format("\033[33m" if active else "\033[32m", e, len(i.players), "playing" if active else "waiting", i.turn)
+            string = bytes(string.encode("utf-8"))
+            conn.send(string)
+            #conn.send(bytes("{} - {}\n".format(e, " ".join([p.name for p in i.players])).encode("utf-8")))
         try:
             data = conn.recv(1024).decode("utf-8").strip().lower()
         except: 
             continue
+        if len(data) == 10:
+            game = None
+            possible_code = data.lower().strip()
+            for p in all_players:
+                print(p.code, possible_code)
+                if p.code == possible_code and not p.connected:
+                    # if quit during lobby, there won't be an associated game #TODO: associate a game
+                    try:
+                        game = p.game
+                        p.connected = True
+                        print("YOUR GAME IS {}".format(game))
+                        player = p
+                        break
+                    except:
+                        continue
+            if game:
+                break
         if data == "n":
+            print("New game lobby started.")
+            #game = Board(tiles)
+            #game = "new"
+            player = user_settings(conn)
+
             game = Board(tiles)
             game_list.append(game)
+#            game.add_player(you)
+#            game_list.append(game)
+#            game.creator = player
+#            print(game.creator, "game creator")
+#            print(game_list)
+            #TODO: announce new game lobby (probably should wait after player chooses name 
             break
+#            conn.close()
+#            game = None
+        if data == "qy":
+            return quit(), None
         if data == "q":
-            conn.close()
-            sys.exit(0)
+            trying_to_quit = True
+#            conn.close()
+#            game = None
+            #break
         if data.isdigit():
             which_game = int(data)
             if 0 <= which_game < len(game_list):
                 game = game_list[which_game]
                 break
-    return game
+    print("returning game")
+    return game, player
 
-def user_settings(conn, game):
+def user_settings(conn, game=None):
     """User sets settings, such as display name and color."""
     # TODO possibly: spectators?
     while True:
-        conn.send(bytes("Type in your name, desired character(@ # % or &), and color (\033[31;1m1\033[32;1m2\033[33;1m3\033[0m) without using anyone else's\n".encode("utf-8")))
-        for player in game.players:
-            conn.send(bytes("{} - {}\n".format(player.name, player).encode("utf-8")))
+        conn.send(bytes("\033cType in your (one word) name, desired character(@ # % or &), and color (\033[31;1m1\033[32m2\033[33m3\033[34m4\033[35m5\033[36m6\033[37m7\033[0m) without using anyone else's\r\n".encode("utf-8")))
+        conn.send(bytes("If you don't see a straight line here, type '\033[33mascii\033[0m' or '\033[33ma\033[0m' at the end to use ascii-only mode: \033[35;1m─────\033[0m\r\n".encode("utf-8")))
+        conn.send(bytes("For example, to play as Fred using  an at-sign and the color yellow, in ascii-only mode, type '\033[33mfred @ 3 ascii\033[0m'\n\r".encode("utf-8")))
+        conn.send(bytes("Type \033[31mq\033[0m to quit.\r\n".encode("utf-8")))
+        if game:
+            for player in game.players:
+                conn.send(bytes("{} - {}\n".format(player.name, player).encode("utf-8")))
+        else:
+            conn.send(bytes("No one is playing yet!".encode("utf-8")))
 #        data = conn.recv(1024).decode("utf-8").strip().lower().split()
         raw = conn.recv(1024)
         try:
            data = raw.decode("utf-8").strip().lower().split()
         except: 
             continue
-        if len(data) != 3: 
+        if raw.decode("utf-8").lower().strip() in ["q", "quit"]:
+            conn.close()
+            return None
+            #raise AttributeError
+        if not 3 <= len(data) < 5: 
             continue
         if len(data[1]) != 1 and not data[1] in "@#%&": 
+            #TODO: was ble to use the number 5 as a symbol?
             continue
         if not data[2].isdigit():
             continue
-        if (data[2].isdigit() and not (1 <= int(data[2]) <= 3)): 
+        if (data[2].isdigit() and not (1 <= int(data[2]) <= 7)): 
             continue
-        name, char, color = data
+        ascii_mode = False
+        if len(data) == 4:
+            if data[3] not in ("a", "ascii"): continue
+            ascii_mode = True
+        name, char, color = data[:3]
         color = int(color)
-        if name in [p.name for p in game.players]: 
-            continue
-        if char in [p.char for p in game.players]: 
-            continue
-        if color in [p.color for p in game.players]:    
-            continue
-        you = User(color, char, name, conn)
-#        game.add_player(you)
-        game.broadcast("{} joined the game!".format(you))
+        if game:
+            if name in [p.name for p in game.players]: 
+                continue
+            if char in [p.char for p in game.players]: 
+                continue
+            if color in [p.color for p in game.players]:    
+                continue
+            you = User(color, char, name, ascii_mode, conn)
+            game.broadcast("{} joined the game!".format(you))
+        else:
+            you = User(color, char, name, ascii_mode, conn)
         break
     return you
 
@@ -1365,36 +1539,73 @@ def main_loop(conn, you, game):
     jail_methods = {"b": game.pay_bail, "c": game.use_card, "r": game.roll_to_leave_jail,
                     "bail": game.pay_bail, "card": game.use_card, "roll": game.roll_to_leave_jail}
     while True:
-        if game.current_player:
-            you = game.current_player
+        print("you're in the loop")
+#        if game.current_player:
+#            you = game.current_player
+        print(game.started)
         try:
-            #raw = conn.recv(1024)
-            #print(type(raw))
-            #raw = raw.decode("utf-8")
-            #print(type(raw))
-            #raw = conn.recv(1024).decode("utf-8").strip()
-            #raw = conn.recv(1).decode("utf-8").strip()
-            
             raw = conn.recv(1024).decode("utf-8").strip()
-            print(raw)
             data = raw.lower()
         except:
+            print("failed") #TODO: this is a way to check disconnection
             continue
+        print(1)
 
         if game.phase == "GAMEOVER":
             game.show_board()
             continue
+        print(2)
 
         split = data.split()
         if len(split) == 0: continue
         split = [w.lower() for w in split]
         if len(data) > 1 and data.startswith("/"):
-            game.broadcast("{} ({}): {}".format(you.name, you, raw[1:]))
+            game.add_chat(you, raw[1:])
+#            game.broadcast("{} ({}): {}".format(you.name, you, raw[1:]))
+        print(3)
+        if data in ["c", "code"]:
+            you.send("\033[33m{}\033[0m".format(you.code))
+        if you.trying_to_quit:
+            if data == "y":
+                you.connected = False
+                you.send("\033[33m{}\033[0m".format(you.code))
+                you.trying_to_quit = False
+                you.conn.close()
+            else:
+                you.send("Okay, I guess not.")
+                you.trying_to_quit = False
+            
+            #you.conn.close()
+        print(4)
+        if data in ["q", "quit"]:
+            you.trying_to_quit = True
+            you.send("Are you sure you want to quit?  Type '\033[31my\033[0m' to confirm.")
+        if data == "qy":
+            you.send("\033[33m{}\033[0m".format(you.code))
+            you.connected = False
+            you.conn.close()
+        print(5)
         if not game.started:
-            if you == game.creator and data == "s":
+            print("!!!!!!!!!!!!")
+            print(you==game.creator, data, game.players)
+            if you == game.creator and data == "s" and len(game.players) > 1:
+                print("game has begun")
                 game.begin()
+                #TODO: error one time, not enough players but this still went through
             continue
+        print(6)
+        if data in ["q", "quit"]:
+            pass
+        if data in ["h", "help"]:
+            you.send("hello world")
+            game.help(you)
 
+        if data == "chat":
+            string = "\033c"
+            for c in game.chat_messages:
+                string += c + "\r\n"
+            string = string.strip()
+            you.send(string)
         if game.current_trade:
             #TODO: debug
             game.accept_trade()
@@ -1409,7 +1620,30 @@ def main_loop(conn, you, game):
                 game.handle_bid(you, int(data))
             continue
 
+        if data == "me":
+            game.show_player_info(you)
+        if data == "board":
+            if you.ascii_mode:
+                you.send(vis.show_board(game, "basic"))
+            else:
+                you.send(vis.show_board(game, "fancy"))
         if you == game.current_player:
+            print("are you in debt?")
+            print(you.in_debt, you.money, you.worth) 
+            if you.in_debt:
+                print("you are")
+                
+
+                if len(split) == 2 and split[0] in ["s", "sell"]:
+                    game.sell_tile(you, split[1])
+                elif split[0] in ["t", "trade"]:
+                    trade = game.parse_trade(you, split)
+                    if trade:
+                        game.current_trade = trade
+                        continue
+                else:
+                    you.send("You must resolve your debt.")
+                    continue
             if game.phase == "roll":
                 if you.jailed:
                     if data in jail_methods.keys():
@@ -1417,10 +1651,14 @@ def main_loop(conn, you, game):
                 elif data in ["r", "roll", ""]:
                     game.player_rolls()
             elif game.phase == "buy":
+                
                 if data in ["buy", "b"]:
                     if isinstance(you.tile, PropertyTile) and you.tile.buy(you):
+                        print("@@@@@@@@@@@@@@@@@")
                         game.phase = "accounts"
                     else:
+                        print("!!!!!!!!!!!!!")
+                        you.send("This isn't for sale!")
                         continue
 
                 #TODO: does this block belong here?
@@ -1428,13 +1666,15 @@ def main_loop(conn, you, game):
                     game.sell_tile(you, split[1])
                         
                 elif data in ["auction", "a"]:
-                    game.broadcast("{} is going up for auction!  Any player can type any amount.".format(you.tile.name))
-                    game.in_auction = True
-                    game.highest_bid = (None, 0)
-                    game.auction_timer = threading.Thread(target = game.handle_auction, args=(you.tile,))
-            elif game.phase == "debt":
-                if len(split) == 2 and split[0] in ["s", "sell"]:
-                    game.sell_tile(you, split[1])
+                    if isinstance(you.tile, PropertyTile) and not you.tile.owner and not you.tile.owner == you:
+                        game.broadcast("{} is going up for auction!  Any player can type any amount.".format(you.tile.name))
+                        game.in_auction = True
+                        game.highest_bid = (None, 0)
+                        game.auction_timer = threading.Thread(target = game.handle_auction, args=(you.tile,))
+                    else:
+                        print("????????????")
+                        you.send("This isn't for sale!")
+                        continue
                     
             elif game.phase == "accounts":
                 if data in ["p", "pass"]:
@@ -1455,7 +1695,6 @@ def main_loop(conn, you, game):
                     game.sell_tile(you, split[1])
                 elif split[0] in ["t", "trade"]:
                     trade = game.parse_trade(you, split)
-                    print(trade)
                     if trade:
                         game.current_trade = trade
                         continue
@@ -1464,30 +1703,96 @@ def main_loop(conn, you, game):
 
 def handle_connection(conn, game_list):
     """Handles a connection to the server."""
-    conn.send("ZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZZ".encode("utf-8"))
     code = bytearray()
     for i in [0xff, 0xfe, 0x03, 0xff, 0xfb, 0x22, 0xff, 0xfe, 0x01]:
-#    for i in [0xff, 0xfd, 0x03, 0xff, 0xfc, 0x22, 0xff, 0xfd, 0x01]:
         code.append(i)
-    for i in range(100):
-        code.append(ord("Q"))
-    print(code)
     conn.send(code)
-    game = game_menu(conn, game_list)
-    if debug:
-        colors = [1, 2, 3]
-        names = ["abby", "becky", "charlie"]
-        names = ["Player1", "Player2", "Player3"]
-        chars = ["@", "#", "&"]
-        you = User(colors[len(game.players)], chars[len(game.players)], names[len(game.players)], conn)
-    else: 
-        you = user_settings(conn, game)
-    game.add_player(you)
-    if you == game.creator: 
-        you.send("Type 'S' to begin the game after everyone has joined.")
+    # First, get the game
+    game, player = game_menu(conn, game_list)
+
+    # if you chose a new game, then you go through user_settings and a game is created
+    # in game_menu because a game lobby cant exist without a creator
+    #, so this return shouldn't run unless player quit.
+    if not game: return
+
+    print(game.started, game.players, player)
+    # So there's an existing game lobby you are joining.
+    if not game.started:# and game.players:
+        # joining pending game lobby
+        if not player:
+            # you'll have to pick a name
+            player = user_settings(conn, game)
+            #game.add_player(player)
+            # then you clearly don't wnat to play...
+            if not player:
+                print("c")
+                return False
+        else:
+            print("d")
+#            you = player
+#        print("e")
+#        print("main loop will run")
+#        main_loop(conn, you, game)
+#        return
+    else:
+        print("f")
+#        you = player
+        player.conn = conn
+        if player.ascii_mode:
+            player.send(vis.show_board(game, "basic"))
+        else:
+            player.send(vis.show_board(game, "fancy"))
+        player.send("You have rejoined the game")
+        
+#        main_loop(conn, you, game)
+#        return
+            
+    you = player
+    game.add_player(you) #TODO: is this duplicating players?
+    all_players.append(you)
+    print("Player {} ({}) joined game.".format(you.name, you))
+    you.send("\033cYour reconnect code is \033[32m{}\033[0m.  Write that down somewhere!  If you disconnect, you can rejoin your game with it instantly.".format(you.code))
+    if you == game.creator and not game.started: 
+        you.send("Type '\033[33mS\033[0m' to begin the game after everyone has joined.")
     main_loop(conn, you, game)
 
 debug = False
+def check_connection(conn):
+    print("CHECKING CONNECTION")
+    associated_with_player = False
+    associated_game = False
+    while True:
+        if not associated_with_player:
+            for p in all_players:
+                if p.conn == conn:
+                    print("associated connection with {}, will stop checking".format(p))
+                    associated_with_player = p
+                    for g in game_list:
+                        if p in g.players:
+                            associated_game = g
+
+        x = conn.fileno()
+        if x < 0 and associated_with_player:
+            associated_game.broadcast("left the game")
+            if not associated_game.started:
+                associated_game.players.remove(associated_with_player)
+                if len(associated_game.players) == 1:
+                    #TODO: tell the guy he's the new owner
+                    print("new owner")
+                    print(associated_game.players)
+                    associated_game.creator = associated_game.players[0]
+                elif len(associated_game.players) == 0:
+                    print("game removed")
+                    print(game_list)
+                    game_list.remove(associated_game)
+
+                print(associated_game.players)
+            print("x is {}".format(x))
+            break
+#        print(x)
+#        if not x:
+#            break
+        time.sleep(1)
 if __name__ == "__main__":
     HOST = ""
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -1500,10 +1805,18 @@ if __name__ == "__main__":
     s.listen(10)
     game_list = []
     conns = []
+    all_players = []
+    print("Game server started!")
     while True:
         conn, addr = s.accept()
+        print(addr)
+        print(dir(conn))
+        print(dir(conn.gettimeout()))
+        print(conn.fileno())
         conns.append(conn)
         thread = threading.Thread(target=handle_connection, args=(conn, game_list))
+        check_conn_thread = threading.Thread(target=check_connection, args=(conn,))
         thread.start()
+        check_conn_thread.start()
     s.close()
 
