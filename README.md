@@ -21,7 +21,7 @@ Select one by typing in its number.
 Or you can create a new one with 'n'.  
 If you had previously disconnected, you can just input your ten-letter random code to rejoin the game.  
 
-# How to Play
+## How to Play
 * R to roll the dice
 * B to buy property
 * S to sell
@@ -30,7 +30,7 @@ If you had previously disconnected, you can just input your ten-letter random co
 * Q to quit (not forfeit, but leave the server)
 * /\<text\> to chat
 
-# TODO
+## TODO
 * Polish things up
 * Complete chance/community cards
 * Implement trading
