@@ -1,6 +1,7 @@
 # seanopoly
 Monopoly for telnet clients.
 More or less the same rules as regular Monopoly.
+![Screenshot](./monop.png)
 ## Installation:
 
     chmod +x monopoly.py
