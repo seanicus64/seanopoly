@@ -71,10 +71,7 @@ def show_board(game, board_type):
     \r|     |  300 |  300 |$    $|  320 |  200 |?    ?|  350 | -100 |  400 |          
     \r+-----+--{}--+--{}--+------+--{}--+--{}--+------+--{}--+------+--{}--+         
     \r{} - {}┺\n""" 
-#    def format_board(self, board)
     board = basic_board if board_type == "basic" else fancy_board
-    #print(board)
-    print(board_type)
     text = textwrap.dedent(board.format(
         game.phase,
         t[9].t, t[8].t,         t[6].t, t[5].t,         t[3].t,         t[1].t, 
